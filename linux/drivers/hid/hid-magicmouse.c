@@ -3,6 +3,7 @@
  *
  *   Copyright (c) 2010 Michael Poole <mdpoole@troilus.org>
  *   Copyright (c) 2010 Chase Douglas <chase.douglas@canonical.com>
+ *   Copyright (c) 2018 Rohit Pidaparthi <rohitkernel@gmail.com>
  */
 
 /*
@@ -26,6 +27,10 @@
 static bool emulate_3button = true;
 module_param(emulate_3button, bool, 0644);
 MODULE_PARM_DESC(emulate_3button, "Emulate a middle button");
+
+static bool middle_click_3finger = false;
+module_param(middle_click_3finger, bool, 0644);
+MODULE_PARM_DESC(middle_click_3finger, "Use 3 finger click to emulate middle button");
 
 static int middle_button_start = -250;
 static int middle_button_stop = +250;
@@ -160,6 +165,24 @@ static int magicmouse_firm_touch(struct magicmouse_sc *msc)
 	return touch;
 }
 
+static int magicmouse_detect_3finger_click(struct magicmouse_sc *msc)
+{
+	int fingers = 0;
+	int ii;
+
+	/* Only consider fingers with size > 10 as real clicks.
+	 * TODO: Consider better palm rejection.
+	 */
+	for (ii = 0; ii < msc->ntouches; ii++) {
+		int idx = msc->tracking_ids[ii];
+		if (msc->touches[idx].size > 10) {
+			fingers++;
+		}
+	}
+
+	return fingers;
+}
+
 static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 {
 	int last_state = test_bit(BTN_LEFT, msc->input->key) << 0 |
@@ -177,6 +200,16 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 			/* The button was released. */
 		} else if (last_state != 0) {
 			state = last_state;
+		} else if (middle_click_3finger){
+			int x;
+			id = magicmouse_firm_touch(msc);
+			x = msc->touches[id].x;
+			if (magicmouse_detect_3finger_click(msc) > 2)
+				state = 4;
+			else if (x <= 0)
+				state = 1;
+			else if (x > 0)
+				state = 2;
 		} else if ((id = magicmouse_firm_touch(msc)) >= 0) {
 			int x = msc->touches[id].x;
 			if (x < middle_button_start)
@@ -185,8 +218,7 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 				state = 2;
 			else
 				state = 4;
-		} /* else: we keep the mouse's guess */
-
+			}/* else: we keep the mouse's guess */
 		input_report_key(msc->input, BTN_MIDDLE, state & 4);
 	}
 
@@ -206,6 +238,29 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 
 	if (input->id.product == USB_DEVICE_ID_APPLE_MAGICMOUSE ||
 		input->id.product == USB_DEVICE_ID_APPLE_MAGICMOUSE2) {
+		/* tdata is 8 bytes per finger detected.
+		 * tdata[0] (lsb of x) and least sig 4bits of tdata[1] (msb of x)
+		 *          are x position of touch on touch surface.
+		 * tdata[1] most sig 4bits (lsb of y) and and tdata[2] (msb of y)
+		 *          are y position of touch on touch surface.
+		 * tdata[1] bits look like [y y y y x x x x]
+		 * tdata[3] touch major axis of ellipse of finger detected
+		 * tdata[4] touch minor axis of ellipse of finger detected
+		 * tdata[5] contains 6bits of size info (lsb) and the two msb of tdata[5]
+		 *          are the lsb of id: [id id size size size size size size]
+		 * tdata[6] 2 lsb bits of tdata[6] are the msb of id and 6msb of tdata[6]
+		 *          are the orientation of the touch. [o o o o o o id id]
+		 * tdata[7] 4 msb are state. 4lsb are unknown.
+		 *
+		 * [ x x x x x x x x ]
+		 * [ y y y y x x x x ]
+		 * [ y y y y y y y y ]
+		 * [touch major      ]
+		 * [touch minor      ]
+		 * [id id s s s s s s]
+		 * [o o o o o o id id]
+		 * [s s s s | unknown]
+		 */
 		id = (tdata[6] << 2 | tdata[5] >> 6) & 0xf;
 		x = (tdata[1] << 28 | tdata[0] << 20) >> 20;
 		y = -((tdata[2] << 24 | tdata[1] << 16) >> 20);
@@ -387,8 +442,29 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		 */
 		break;
 	case MOUSE2_REPORT_ID:
-        /* Expect six bytes of prefix, six bytes of touch prefix and N*8 bytes of touch data. */
-        if (size > 6 && ((size - 14) % 8) != 0)
+		/* The data layout for magic mouse 2 is:
+		 * 14 bytes of prefix
+		 * data[0] is the device report ID
+		 * data[1] is the mouse click events. Value of 1 is left, 2 is right.
+		 * data[2] (contains lsb) and data[3] (msb) are the x movement
+		 *         of the mouse 16bit representation.
+		 * data[4] (contains msb) and data[5] (msb) are the y movement
+		 *         of the mouse 16bit representation.
+		 * data[6] data[13] are unknown so far. Need to decode this still
+		 *
+		 * data[14] onwards represent touch data on top of the mouse surface
+		 *          touchpad. There are 8 bytes per finger. e.g:
+		 * data[14]-data[21] will be the first finger detected.
+		 * data[22]-data[29] will be finger 2 etc.
+		 * these sets of 8 bytes are passed in as tdata to
+		 * magicmouse_emit_touch()
+		 *
+		 * npoints is the number of fingers detected.
+		 * size is minimum 14 but could be any multpiple of 14+ii*8 based on
+		 * how many fingers are detected. e.g for 1 finger, size=22 for
+		 * 2 fingers, size=30 and so on.
+		 */
+		if (size > 14 && ((size - 14) % 8) != 0)
             return 0;
         npoints = (size - 14) / 8;
         if (npoints > 15) {
@@ -397,6 +473,14 @@ static int magicmouse_raw_event(struct hid_device *hdev,
             return 0;
         }
         msc->ntouches = 0;
+		// print the values of the first 14 bytes of data and number of points and size.
+		// printk("The contents of npoints are: %i\n", npoints);
+		// printk("Size is: %i\n", size);
+		// int jj = 0;
+		// for (jj=0; jj < 15; jj++){
+		// 	int d = data[jj];
+		// 	printk("data %i is: %i\n", jj, d);
+		// }
         for (ii = 0; ii < npoints; ii++)
             magicmouse_emit_touch(msc, ii, data + ii * 8 + 14, npoints);
 
@@ -404,11 +488,8 @@ static int magicmouse_raw_event(struct hid_device *hdev,
          * to have the current touch information before
          * generating a click event.
          */
-		// As for now, x, y seems to be handled by some other module
-		// (what? Need to find by what), and I have no
-		// ideas how to parse incoming x,y values. Just skip them for now.
-        // x = (int)(((data[3] & 0x0c) << 28) | (data[1] << 22)) >> 22;
-        // y = (int)(((data[3] & 0x30) << 26) | (data[2] << 22)) >> 22;
+        x = (int)((data[3] << 24) | (data[2] << 16)) >> 16;
+        y = (int)((data[5] << 24) | (data[4] << 16)) >> 16;
         clicks = data[1];
         break;
 	case DOUBLE_REPORT_ID:
