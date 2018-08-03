@@ -1,4 +1,4 @@
-# Linux-Magic-Trackpad-2-Driver
+# Linux Apple Magic Mouse 2 and Magic Trackpad 2 Driver
 
 This repository contains the linux hid-magicmouse driver with Magic Trackpad 2 and Magic Mouse 2 support for Linux 4.18. For older kernels you might have to diff and backport.
 
@@ -8,10 +8,10 @@ The driver is tested in combination with the xf86-libinput and xf86-mtrack drive
 
 Please help to test this driver and report issues.
 
-## Trackpad 2
+## Apple Magic Trackpad 2
 The driver supports bluetooth and USB for the trackpad. To connect the Trackpad via bluetooth, it must be clicked once after it is turned on, then the Trackpad tries to reconnect to the last paired (and trusted) connection.
 
-## Mouse 2
+## Apple Magic Mouse 2
 The drivers supports regular mouse motion and additionally scrolling and mouse middle click. Middle click is a single finger click near the middle portion of the touch surface OR a 3 finger click anywhere on the touch surface if you put the mouse in 3 finger middle click mode (instructions on how to do this are in the installation section. If you like this, please let me know so I can make it the default). Scrolling is a single finger up or down motion anywhere on the touch surface.
 
 ## libinput
