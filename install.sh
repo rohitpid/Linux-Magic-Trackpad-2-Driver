@@ -21,6 +21,7 @@ cd ${DIR}
 mkdir -p ${OPT}
 cp -f ${DIR}/linux/drivers/hid/hid-magicmouse.ko ${OPT}/hid-magicmouse.ko
 cp -f ${DIR}/scripts/magic-mouse-2-add.sh ${OPT}/magic-mouse-2-add.sh
+chmod +x ${OPT}/magic-mouse-2-add.sh
 
 # Copy udev rule and reload udev
 cp -f ${DIR}/udev/rules.d/10-magicmouse.rules ${UDEV}/10-magicmouse.rules
