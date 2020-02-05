@@ -2,7 +2,7 @@
 
 This repository contains the linux hid-magicmouse driver with Magic Trackpad 2 and Magic Mouse 2 support for Linux 4.18. For older kernels you might have to diff and backport. It also contains 2 fixes to the Magic Mouse 2 regarding Bluetooth random disconnections and this driver not loading on bluetooth reconnection.
 
-This driver is based off of the work of @robotrovsky, @svartalf, @ 0xABAD and probably others.
+This driver is based off of the work of @robotrovsky, @svartalf, @0xABAD and probably others.
 
 The driver is tested in combination with the xf86-libinput and xf86-mtrack driver.
 
@@ -184,6 +184,7 @@ We now need to create a `udev` rule that runs the script and loads the driver wh
 
 ```
 SUBSYSTEMS=="usb", \
+    ATTRS{idVendor}=="0cf3", \
     ATTRS{idProduct}=="e300", \
     ACTION=="add", \
     SYMLINK+="input/magicmouse", \

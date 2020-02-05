@@ -1,4 +1,5 @@
 SUBSYSTEMS=="usb", \
+    ATTRS{idVendor}=="0cf3", \
     ATTRS{idProduct}=="e300", \
     ACTION=="add", \
     SYMLINK+="input/magicmouse", \
