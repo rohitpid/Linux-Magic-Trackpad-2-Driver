@@ -183,8 +183,8 @@ You can also adjust the scroll_speed to a value of your liking (somewhere betwee
 We now need to create a `udev` rule that runs the script and loads the driver when the Mouse connects. In `/etc/udev/rules.d` directory create a `10-magicmouse.rules` file and add the following:
 
 ```
-SUBSYSTEMS=="input", \
-    ATTRS{idProduct}=="e300"
+SUBSYSTEMS=="usb", \
+    ATTRS{idProduct}=="e300", \
     ACTION=="add", \
     SYMLINK+="input/magicmouse", \
     RUN+="/opt/magic-mouse-fix/magic-mouse-2-add.sh"

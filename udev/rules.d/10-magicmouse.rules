@@ -1,5 +1,5 @@
-SUBSYSTEMS=="input", \
-    ATTRS{idProduct}=="e300"
+SUBSYSTEMS=="usb", \
+    ATTRS{idProduct}=="e300", \
     ACTION=="add", \
     SYMLINK+="input/magicmouse", \
     RUN+="/opt/magic-mouse-fix/magic-mouse-2-add.sh"
