@@ -1,6 +1,6 @@
-SUBSYSTEMS=="usb", \
-    ATTRS{idVendor}=="0cf3", \
-    ATTRS{idProduct}=="e300", \
+SUBSYSTEM=="input", \
+    KERNEL=="mouse*", \
+    KERNELS=="0005:004C:0269*", \
     ACTION=="add", \
-    SYMLINK+="input/magicmouse", \
+    SYMLINK+="input/magicmouse-%k", \
     RUN+="/opt/magic-mouse-fix/magic-mouse-2-add.sh"
