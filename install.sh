@@ -4,8 +4,8 @@ set -e
 set -x
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-OPT="/opt/magic-mouse-fix/"
-UDEV="/etc/udev/rules.d/"
+OPT="/opt/magic-mouse-fix"
+UDEV="/etc/udev/rules.d"
 
 # Install drive through DKMS
 chmod u+x ${DIR}/scripts/install.sh
