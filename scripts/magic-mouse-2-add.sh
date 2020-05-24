@@ -7,6 +7,7 @@ reload() {
         touch $FILE
 
         modprobe -r hid_magicmouse
+        sleep 2
         insmod /opt/magic-mouse-fix/hid-magicmouse.ko \
             scroll_acceleration=1 \
             scroll_speed=25 \
