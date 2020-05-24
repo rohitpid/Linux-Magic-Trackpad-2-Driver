@@ -1,5 +1,6 @@
 SUBSYSTEM=="input", \
     KERNEL=="mouse*", \
+    SUBSYSTEMS=="hid", \
     KERNELS=="0005:004C:0269*", \
     ACTION=="add", \
     SYMLINK+="input/magicmouse-%k", \
