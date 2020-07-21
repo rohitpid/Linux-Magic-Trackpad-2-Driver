@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
 set -e
 set -x
 
@@ -22,7 +27,7 @@ chmod +x ${OPT}/magic-mouse-2-add.sh
 # Copy udev rule and reload udev
 cp -f ${DIR}/udev/rules.d/10-magicmouse.rules ${UDEV}/10-magicmouse.rules
 udevadm control -R
-/etc/init.d/bluetooth restart
+systemctl restart bluetooth
 
 # Clean driver build
 cd ${DIR}/linux/drivers/hid

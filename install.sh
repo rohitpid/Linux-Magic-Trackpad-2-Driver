@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
 set -e
 set -x
 
@@ -29,7 +34,7 @@ udevadm control -R
 
 # Disable eSCO mode in Bluetooth to fix disconnection problems with the mouse
 echo 1 | tee /sys/module/bluetooth/parameters/disable_esco
-/etc/init.d/bluetooth restart
+systemctl restart bluetooth
 # persist setting
 echo "options bluetooth disable_esco=1" | tee /etc/modprobe.d/bluetooth-tweaks.conf
 
