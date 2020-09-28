@@ -121,6 +121,7 @@ MODULE_PARM_DESC(report_undeciphered, "Report undeciphered multi-touch state fie
  * @ntouches: Number of touches in most recent touch report.
  * @scroll_accel: Number of consecutive scroll motions.
  * @scroll_jiffies: Time of last scroll motion.
+ * @drag_start: Time of drag start.
  * @touches: Most recent data for a touch, indexed by tracking ID.
  * @tracking_ids: Mapping of current touch input data to @touches.
  */
@@ -131,6 +132,7 @@ struct magicmouse_sc {
 	int ntouches;
 	int scroll_accel;
 	unsigned long scroll_jiffies;
+	unsigned long drag_start;
 
 	struct {
 		short x;
@@ -314,6 +316,8 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 			msc->touches[id].scroll_x = x;
 			msc->touches[id].scroll_y = y;
 
+			msc->drag_start = now;
+
 			/* Reset acceleration after half a second. */
 			if (scroll_acceleration && time_before(now,
 						msc->scroll_jiffies + HZ / 2))
@@ -324,7 +328,19 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 
 			break;
 		case TOUCH_STATE_DRAG:
-			step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
+			/* Add a fifth of a second delay since the drag start in which
+			 * drag events are not registered. This decreases the
+			 * sensitivity of dragging on Magic Mouse devices.
+			 */
+			if (time_before(now, msc->drag_start + HZ / 5)) {
+					step_x = 0;
+					step_y = 0;
+			}
+			else {
+					step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
+					step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
+			}
+
 			if (step_x != 0) {
 				msc->touches[id].scroll_x -= step_x *
 					(64 - scroll_speed) * msc->scroll_accel;
@@ -332,7 +348,6 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 				input_report_rel(input, REL_HWHEEL, -step_x);
 			}
 
-			step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
 			if (step_y != 0) {
 				msc->touches[id].scroll_y -= step_y *
 					(64 - scroll_speed) * msc->scroll_accel;
