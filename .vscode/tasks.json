@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build the Magicmouse 2 Driver",
+            "type": "shell",
+            "command": "cd linux/drivers/hid && make KERNEL_SRC=LINUX_PATH",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean the Magicmouse 2 Driver",
+            "type": "shell",
+            "command": "cd linux/drivers/hid && make KERNEL_SRC=LINUX_PATH clean",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Install the Magicmouse 2 Driver (requires sudo password input)",
+            "type": "shell",
+            "command": "sudo ./install.sh",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Uninstall the Magicmouse 2 Driver (requires sudo password input)",
+            "type": "shell",
+            "command": "sudo ./remove.sh",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
