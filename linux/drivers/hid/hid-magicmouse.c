@@ -51,6 +51,19 @@ static int param_set_scroll_speed(const char *val,
 module_param_call(scroll_speed, param_set_scroll_speed, param_get_uint, &scroll_speed, 0644);
 MODULE_PARM_DESC(scroll_speed, "Scroll speed, value from 0 (slow) to 63 (fast)");
 
+// HZ (time constant for 1 second) is 250. Meaning that 50 is a quarter of that time (200ms).
+static unsigned int scroll_delay = 50;
+static int param_set_scroll_delay(const char *val,
+				  const struct kernel_param *kp) {
+	unsigned long delay;
+	if (!val || kstrtoul(val, 0, &delay) || delay > 1000)
+		return -EINVAL;
+	scroll_delay = delay;
+	return 0;
+}
+module_param_call(scroll_delay, param_set_scroll_delay, param_get_uint, &scroll_delay, 0644);
+MODULE_PARM_DESC(scroll_delay, "Scroll delay, value from 0 (immediate) to 1000 (very late scroll)");
+
 static bool scroll_acceleration = false;
 module_param(scroll_acceleration, bool, 0644);
 MODULE_PARM_DESC(scroll_acceleration, "Accelerate sequential scroll events");
@@ -332,7 +345,7 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 			 * drag events are not registered. This decreases the
 			 * sensitivity of dragging on Magic Mouse devices.
 			 */
-			if (time_before(now, msc->drag_start + HZ / 5)) {
+			if (time_before(now, msc->drag_start + scroll_delay)) {
 					step_x = 0;
 					step_y = 0;
 			}
