@@ -7,12 +7,8 @@ reload() {
         touch $FILE
 
         modprobe -r hid_magicmouse
-        modprobe -a hid-generic
         sleep 2
-        insmod /opt/magic-mouse-fix/hid-magicmouse.ko \
-            scroll_acceleration=1 \
-            scroll_speed=25 \
-            middle_click_3finger=1
+        modprobe -a hid-generic hid_magicmouse
 
         sleep 2
         rm -f "$FILE"

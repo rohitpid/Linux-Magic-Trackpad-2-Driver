@@ -1,0 +1,46 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}",
+                "/usr/include",
+                "/usr/src/linux-headers-5.8.0-7642-generic/include/",
+                "/usr/src/linux-headers-5.8.0-7642-generic/include/uapi",
+                "/usr/src/linux-headers-5.8.0-7642-generic/include/generated/uapi",
+                "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/",
+                "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/generated",
+                "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/uapi",
+                "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/generated/uapi",
+                "/usr/lib/gcc/x86_64-linux-gnu/10/include/"
+            ],
+            "defines": [
+                "KBUILD_MODNAME=\"hello_module\"",
+                "__GNUC__",
+                "__KERNEL__",
+                "MODULE"
+            ],
+            "intelliSenseMode": "gcc-x64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/usr/include",
+                    "/usr/src/linux-headers-5.8.0-7642-generic/include/",
+                    "/usr/src/linux-headers-5.8.0-7642-generic/include/uapi",
+                    "/usr/src/linux-headers-5.8.0-7642-generic/include/generated/uapi",
+                    "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/",
+                    "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/generated",
+                    "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/uapi",
+                    "/usr/src/linux-headers-5.8.0-7642-generic/arch/x86/include/generated/uapi",
+                    "/usr/lib/gcc/x86_64-linux-gnu/10/include/"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
