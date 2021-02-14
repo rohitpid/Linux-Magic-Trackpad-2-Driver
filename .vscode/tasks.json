@@ -2,6 +2,17 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Build and Clean the Magicmouse 2 Driver",
+            "type": "shell",
+            "command": "cd linux/drivers/hid && make KERNEL_SRC=LINUX_PATH && make KERNEL_SRC=LINUX_PATH clean",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Build the Magicmouse 2 Driver",
             "type": "shell",
             "command": "cd linux/drivers/hid && make KERNEL_SRC=LINUX_PATH",
