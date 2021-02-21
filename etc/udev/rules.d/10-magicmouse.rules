@@ -6,4 +6,4 @@ SUBSYSTEM=="input", \
     DRIVERS=="hid-generic|magicmouse", \
     ACTION=="add", \
     SYMLINK+="input/magicmouse-%k", \
-    RUN+="/opt/magic-mouse-fix/magic-mouse-2-add.sh"
+    RUN+="/opt/magicmouse-hid/magic-mouse-2-add.sh"

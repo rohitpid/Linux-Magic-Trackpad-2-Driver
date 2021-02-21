@@ -9,7 +9,7 @@ set -e
 set -x
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-OPT_DIR="/opt/magic-mouse-fix"
+OPT_DIR="/opt/magicmouse-hid"
 UDEV_DIR="/etc/udev/rules.d"
 MODPROBE_DIR="/etc/modprobe.d"
 
