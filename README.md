@@ -6,6 +6,11 @@ This driver is based off of the work of @robotrovsky, @svartalf, @0xABAD and pro
 
 Please help to test this driver and report issues.
 
+## Ubuntu (and derivatives)
+
+A `.deb` file is now available in Releases. Get the [latest version here](https://github.com/RicardoEPRodrigues/magicmouse-hid/releases/latest).
+
+
 ## Install Driver with DKMS and the two fixes.
 
 Setup/install with:
