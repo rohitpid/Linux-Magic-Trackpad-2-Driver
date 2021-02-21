@@ -1,0 +1,13 @@
+Package: magicmouse-hid
+Version: 1.0.0-0
+Maintainer: Ricardo Rodrigues <ricardo.proenca.rodrigues@tecnico.ulisboa.pt>
+Description: Magic Mouse 2 driver for Linux
+ This driver makes use of DKMS to load the driver in the kernel, while
+ making use of udev rules to load the driver when a mouse is connected.
+Homepage: https://github.com/RicardoEPRodrigues/Linux-Magic-Trackpad-2-Driver
+Architecture: all
+Depends: dkms, bash
+Section: utils
+Priority: optional
+Essential: no
+Installed-Size: 354

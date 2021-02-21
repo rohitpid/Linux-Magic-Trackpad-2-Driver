@@ -1,0 +1,15 @@
+4e98e3ddfe2f2677c4ba7d40160ad805  opt/magicmouse-hid/scripts/remove.sh
+19394e43a8b68454dd1ecb0b053b1eb4  opt/magicmouse-hid/scripts/install.sh
+9d8311a258e4a5f2d21621c510d2865b  opt/magicmouse-hid/magic-mouse-2-add.sh
+a01b7f00714f6281bf2489654825d920  opt/magicmouse-hid/linux/linux/drivers/hid/Makefile
+db55932808cb9137512a48a5f10e91ca  opt/magicmouse-hid/linux/linux/drivers/hid/dkms.conf
+65e911f8a2c968a242bdeea3483822e6  opt/magicmouse-hid/linux/linux/drivers/hid/hid-quirks.c
+09cc6d34174bd1d0b1f81bd28954524f  opt/magicmouse-hid/linux/linux/drivers/hid/hid-magicmouse.c
+2cc66b539552c6edd592484e3e1d5ba3  opt/magicmouse-hid/linux/linux/drivers/hid/hid-ids.h
+a01b7f00714f6281bf2489654825d920  opt/magicmouse-hid/linux/drivers/hid/Makefile
+db55932808cb9137512a48a5f10e91ca  opt/magicmouse-hid/linux/drivers/hid/dkms.conf
+65e911f8a2c968a242bdeea3483822e6  opt/magicmouse-hid/linux/drivers/hid/hid-quirks.c
+09cc6d34174bd1d0b1f81bd28954524f  opt/magicmouse-hid/linux/drivers/hid/hid-magicmouse.c
+2cc66b539552c6edd592484e3e1d5ba3  opt/magicmouse-hid/linux/drivers/hid/hid-ids.h
+44c561036e33a298dcf6729bdf475826  etc/udev/rules.d/10-magicmouse.rules
+968e12ffccc68d19011cc2f29a4badad  etc/modprobe.d/hid-magicmouse.conf
