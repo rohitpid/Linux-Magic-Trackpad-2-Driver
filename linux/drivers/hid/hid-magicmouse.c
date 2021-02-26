@@ -4,6 +4,7 @@
  *   Copyright (c) 2010 Michael Poole <mdpoole@troilus.org>
  *   Copyright (c) 2010 Chase Douglas <chase.douglas@canonical.com>
  *   Copyright (c) 2018 Rohit Pidaparthi <rohitkernel@gmail.com>
+ *   Copyright (c) 2021 Ricardo Rodrigues <ricardo.e.p.rodrigues@gmail.com>
  */
 
 /*
@@ -145,7 +146,6 @@ struct magicmouse_sc {
 	int ntouches;
 	int scroll_accel;
 	unsigned long scroll_jiffies;
-	unsigned long drag_start;
 
 	struct {
 		short x;
@@ -153,6 +153,7 @@ struct magicmouse_sc {
 		short scroll_x;
 		short scroll_y;
 		u8 size;
+		unsigned long drag_start;
 	} touches[MAX_TOUCHES];
 	int tracking_ids[MAX_TOUCHES];
 };
@@ -169,7 +170,10 @@ static int magicmouse_firm_touch(struct magicmouse_sc *msc)
 		int idx = msc->tracking_ids[ii];
 		if (msc->touches[idx].size < 8) {
 			/* Ignore this touch. */
-		} else if (touch >= 0) {
+			continue;
+		} 
+		
+		if (touch >= 0) {
 			touch = -1;
 			break;
 		} else {
@@ -207,6 +211,8 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 	if (emulate_3button) {
 		int id;
 
+		id = magicmouse_firm_touch(msc);
+
 		/* If some button was pressed before, keep it held
 		 * down.  Otherwise, if there's exactly one firm
 		 * touch, use that to override the mouse's guess.
@@ -215,9 +221,8 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 			/* The button was released. */
 		} else if (last_state != 0) {
 			state = last_state;
-		} else if (middle_click_3finger){
+		} else if (id >= 0 && middle_click_3finger){
 			int x;
-			id = magicmouse_firm_touch(msc);
 			x = msc->touches[id].x;
 			if (magicmouse_detect_3finger_click(msc) > 2)
 				state = 4;
@@ -225,7 +230,7 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 				state = 1;
 			else if (x > 0)
 				state = 2;
-		} else if ((id = magicmouse_firm_touch(msc)) >= 0) {
+		} else if (id >= 0) {
 			int x = msc->touches[id].x;
 			if (x < middle_button_start)
 				state = 1;
@@ -233,7 +238,7 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 				state = 2;
 			else
 				state = 4;
-			}/* else: we keep the mouse's guess */
+		}/* else: we keep the mouse's guess */
 		input_report_key(msc->input, BTN_MIDDLE, state & 4);
 	}
 
@@ -329,7 +334,7 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 			msc->touches[id].scroll_x = x;
 			msc->touches[id].scroll_y = y;
 
-			msc->drag_start = now;
+			msc->touches[id].drag_start = now;
 
 			/* Reset acceleration after half a second. */
 			if (scroll_acceleration && time_before(now,
@@ -345,7 +350,7 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 			 * drag events are not registered. This decreases the
 			 * sensitivity of dragging on Magic Mouse devices.
 			 */
-			if (time_before(now, msc->drag_start + scroll_delay)) {
+			if (time_before(now, msc->touches[id].drag_start + scroll_delay)) {
 					step_x = 0;
 					step_y = 0;
 			}
