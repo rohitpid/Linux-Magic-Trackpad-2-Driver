@@ -41,7 +41,8 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
-            }
+            },
+            "problemMatcher": []
         },
         {
             "label": "Reinstall the Magicmouse 2 Driver (requires sudo password input)",
@@ -51,7 +52,8 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
-            }
+            },
+            "problemMatcher": []
         },
         {
             "label": "Uninstall the Magicmouse 2 Driver (requires sudo password input)",
@@ -61,7 +63,8 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
-            }
+            },
+            "problemMatcher": []
         }
     ]
 }
