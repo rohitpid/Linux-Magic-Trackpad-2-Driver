@@ -52,18 +52,29 @@ static int param_set_scroll_speed(const char *val,
 module_param_call(scroll_speed, param_set_scroll_speed, param_get_uint, &scroll_speed, 0644);
 MODULE_PARM_DESC(scroll_speed, "Scroll speed, value from 0 (slow) to 63 (fast)");
 
-// HZ (time constant for 1 second) is 250. Meaning that 50 is a quarter of that time (200ms).
-static unsigned int scroll_delay = 50;
-static int param_set_scroll_delay(const char *val,
+static unsigned int scroll_delay_pox_x = 200;
+static int param_set_scroll_delay_pox_x(const char *val,
 				  const struct kernel_param *kp) {
 	unsigned long delay;
-	if (!val || kstrtoul(val, 0, &delay) || delay > 1000)
+	if (!val || kstrtoul(val, 0, &delay))
 		return -EINVAL;
-	scroll_delay = delay;
+	scroll_delay_pox_x = delay;
 	return 0;
 }
-module_param_call(scroll_delay, param_set_scroll_delay, param_get_uint, &scroll_delay, 0644);
-MODULE_PARM_DESC(scroll_delay, "Scroll delay, value from 0 (immediate) to 1000 (very late scroll)");
+module_param_call(scroll_delay_pox_x, param_set_scroll_delay_pox_x, param_get_uint, &scroll_delay_pox_x, 0644);
+MODULE_PARM_DESC(scroll_delay_pox_x, "Scroll X position delay before start scrolling");
+
+static unsigned int scroll_delay_pox_y = 200;
+static int param_set_scroll_delay_pox_y(const char *val,
+				  const struct kernel_param *kp) {
+	unsigned long delay;
+	if (!val || kstrtoul(val, 0, &delay))
+		return -EINVAL;
+	scroll_delay_pox_y = delay;
+	return 0;
+}
+module_param_call(scroll_delay_pox_y, param_set_scroll_delay_pox_y, param_get_uint, &scroll_delay_pox_y, 0644);
+MODULE_PARM_DESC(scroll_delay_pox_y, "Scroll Y position delay before start scrolling");
 
 static bool scroll_acceleration = false;
 module_param(scroll_acceleration, bool, 0644);
@@ -150,10 +161,11 @@ struct magicmouse_sc {
 	struct {
 		short x;
 		short y;
+		short scroll_x_start;
+		short scroll_y_start;
 		short scroll_x;
 		short scroll_y;
 		u8 size;
-		unsigned long drag_start;
 	} touches[MAX_TOUCHES];
 	int tracking_ids[MAX_TOUCHES];
 };
@@ -331,10 +343,10 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 		/* Calculate and apply the scroll motion. */
 		switch (state) {
 		case TOUCH_STATE_START:
+			msc->touches[id].scroll_x_start = x;
+			msc->touches[id].scroll_y_start = y;
 			msc->touches[id].scroll_x = x;
 			msc->touches[id].scroll_y = y;
-
-			msc->touches[id].drag_start = now;
 
 			/* Reset acceleration after half a second. */
 			if (scroll_acceleration && time_before(now,
@@ -346,17 +358,20 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 
 			break;
 		case TOUCH_STATE_DRAG:
-			/* Add a fifth of a second delay since the drag start in which
+			/* Add a position delay since the drag start in which
 			 * drag events are not registered. This decreases the
 			 * sensitivity of dragging on Magic Mouse devices.
 			 */
-			if (time_before(now, msc->touches[id].drag_start + scroll_delay)) {
-					step_x = 0;
-					step_y = 0;
+			if (abs(step_x) < scroll_delay_pox_x) {
+				step_x = 0;
+			} else {
+				step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
 			}
-			else {
-					step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
-					step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
+
+			if (abs(step_y) < scroll_delay_pox_y) {
+				step_y = 0;
+			} else {
+				step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
 			}
 
 			if (step_x != 0) {

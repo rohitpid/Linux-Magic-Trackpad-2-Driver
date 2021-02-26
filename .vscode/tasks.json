@@ -44,6 +44,16 @@
             }
         },
         {
+            "label": "Reinstall the Magicmouse 2 Driver (requires sudo password input)",
+            "type": "shell",
+            "command": "sudo ./remove.sh && sudo ./install.sh",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
             "label": "Uninstall the Magicmouse 2 Driver (requires sudo password input)",
             "type": "shell",
             "command": "sudo ./remove.sh",
