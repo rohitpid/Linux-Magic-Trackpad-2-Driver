@@ -1,5 +1,5 @@
 Package: magicmouse-hid
-Version: 1.0.0-0
+Version: 1.1.0-0
 Maintainer: Ricardo Rodrigues <ricardo.proenca.rodrigues@tecnico.ulisboa.pt>
 Description: Magic Mouse 2 driver for Linux
  This driver makes use of DKMS to load the driver in the kernel, while

@@ -8,7 +8,7 @@ ETC_DIR="/etc"
 PKG_DIR="/pkg-debian"
 OPT_DIR="/opt/magicmouse-hid"
 
-DEB="magicmouse-hid_1.0.0-0.deb"
+DEB="magicmouse-hid_1.1.0-0.deb"
 
 cp -rf ${DIR}${ETC_DIR} ${DIR}${PKG_DIR}
 
