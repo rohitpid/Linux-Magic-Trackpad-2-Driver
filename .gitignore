@@ -1,3 +1,5 @@
 pkg-debian/*
 !pkg-debian/DEBIAN
 *.deb
+
+pkg-debian/DEBIAN/md5sums
