@@ -52,29 +52,29 @@ static int param_set_scroll_speed(const char *val,
 module_param_call(scroll_speed, param_set_scroll_speed, param_get_uint, &scroll_speed, 0644);
 MODULE_PARM_DESC(scroll_speed, "Scroll speed, value from 0 (slow) to 63 (fast)");
 
-static unsigned int scroll_delay_pox_x = 200;
-static int param_set_scroll_delay_pox_x(const char *val,
+static unsigned int scroll_delay_pos_x = 200;
+static int param_set_scroll_delay_pos_x(const char *val,
 				  const struct kernel_param *kp) {
 	unsigned long delay;
 	if (!val || kstrtoul(val, 0, &delay))
 		return -EINVAL;
-	scroll_delay_pox_x = delay;
+	scroll_delay_pos_x = delay;
 	return 0;
 }
-module_param_call(scroll_delay_pox_x, param_set_scroll_delay_pox_x, param_get_uint, &scroll_delay_pox_x, 0644);
-MODULE_PARM_DESC(scroll_delay_pox_x, "Scroll X position delay before start scrolling");
+module_param_call(scroll_delay_pos_x, param_set_scroll_delay_pos_x, param_get_uint, &scroll_delay_pos_x, 0644);
+MODULE_PARM_DESC(scroll_delay_pos_x, "Scroll X position delay before start scrolling");
 
-static unsigned int scroll_delay_pox_y = 200;
-static int param_set_scroll_delay_pox_y(const char *val,
+static unsigned int scroll_delay_pos_y = 200;
+static int param_set_scroll_delay_pos_y(const char *val,
 				  const struct kernel_param *kp) {
 	unsigned long delay;
 	if (!val || kstrtoul(val, 0, &delay))
 		return -EINVAL;
-	scroll_delay_pox_y = delay;
+	scroll_delay_pos_y = delay;
 	return 0;
 }
-module_param_call(scroll_delay_pox_y, param_set_scroll_delay_pox_y, param_get_uint, &scroll_delay_pox_y, 0644);
-MODULE_PARM_DESC(scroll_delay_pox_y, "Scroll Y position delay before start scrolling");
+module_param_call(scroll_delay_pos_y, param_set_scroll_delay_pos_y, param_get_uint, &scroll_delay_pos_y, 0644);
+MODULE_PARM_DESC(scroll_delay_pos_y, "Scroll Y position delay before start scrolling");
 
 static bool scroll_acceleration = false;
 module_param(scroll_acceleration, bool, 0644);
@@ -362,13 +362,13 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 			 * drag events are not registered. This decreases the
 			 * sensitivity of dragging on Magic Mouse devices.
 			 */
-			if (abs(step_x) < scroll_delay_pox_x) {
+			if (abs(step_x) < scroll_delay_pos_x) {
 				step_x = 0;
 			} else {
 				step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
 			}
 
-			if (abs(step_y) < scroll_delay_pox_y) {
+			if (abs(step_y) < scroll_delay_pos_y) {
 				step_y = 0;
 			} else {
 				step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
@@ -890,5 +890,12 @@ static struct hid_driver magicmouse_driver = {
 	.input_configured = magicmouse_input_configured,
 };
 module_hid_driver(magicmouse_driver);
+
+MODULE_AUTHOR("Ricardo Rodrigues");
+MODULE_AUTHOR("Rohit Pidaparthi");
+MODULE_AUTHOR("Chase Douglas");
+MODULE_AUTHOR("Michael Poole");
+
+MODULE_DESCRIPTION("Magic Mouse 2 driver for Linux");
 
 MODULE_LICENSE("GPL");
