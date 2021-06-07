@@ -40,6 +40,10 @@ static bool emulate_scroll_wheel = true;
 module_param(emulate_scroll_wheel, bool, 0644);
 MODULE_PARM_DESC(emulate_scroll_wheel, "Emulate a scroll wheel");
 
+static bool stop_scroll_while_moving = true;
+module_param(stop_scroll_while_moving, bool, 0644);
+MODULE_PARM_DESC(stop_scroll_while_moving, "Stop scrolling whenever the mouse moves");
+
 static unsigned int scroll_speed = 32;
 static int param_set_scroll_speed(const char *val,
 				  const struct kernel_param *kp) {
@@ -157,12 +161,12 @@ struct magicmouse_sc {
 	int ntouches;
 	int scroll_accel;
 	unsigned long scroll_jiffies;
+	int x;
+	int y;
 
 	struct {
 		short x;
 		short y;
-		short scroll_x_start;
-		short scroll_y_start;
 		short scroll_x;
 		short scroll_y;
 		u8 size;
@@ -265,7 +269,7 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 }
 
 static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
-		u8 *tdata, int npoints)
+		u8 *tdata, int npoints, int mouse_loc_x, int mouse_loc_y)
 {
 	struct input_dev *input = msc->input;
 	int id, x, y, size, orientation, touch_major, touch_minor, state, down;
@@ -343,54 +347,61 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 		int step_x = msc->touches[id].scroll_x - x;
 		int step_y = msc->touches[id].scroll_y - y;
 
-		/* Calculate and apply the scroll motion. */
-		switch (state) {
-		case TOUCH_STATE_START:
-			msc->touches[id].scroll_x_start = x;
-			msc->touches[id].scroll_y_start = y;
-			msc->touches[id].scroll_x = x;
-			msc->touches[id].scroll_y = y;
+		/* Determine if the mouse has moved, if so then disable scrolling. */
+		bool continue_scroll = true;
+		if (stop_scroll_while_moving)
+		{
+			continue_scroll = msc->x == mouse_loc_x && msc->y == mouse_loc_y;
+		}
 
-			/* Reset acceleration after half a second. */
-			if (scroll_acceleration && time_before(now,
-						msc->scroll_jiffies + HZ / 2))
-				msc->scroll_accel = max_t(int,
-						msc->scroll_accel - 1, 1);
-			else
-				msc->scroll_accel = SCROLL_ACCEL_DEFAULT;
+		if (continue_scroll) {
+			/* Calculate and apply the scroll motion. */
+			switch (state) {
+			case TOUCH_STATE_START:
+				msc->touches[id].scroll_x = x;
+				msc->touches[id].scroll_y = y;
 
-			break;
-		case TOUCH_STATE_DRAG:
-			/* Add a position delay since the drag start in which
-			 * drag events are not registered. This decreases the
-			 * sensitivity of dragging on Magic Mouse devices.
-			 */
-			if (abs(step_x) < scroll_delay_pos_x) {
-				step_x = 0;
-			} else {
-				step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
+				/* Reset acceleration after half a second. */
+				if (scroll_acceleration && time_before(now,
+							msc->scroll_jiffies + HZ / 2))
+					msc->scroll_accel = max_t(int,
+							msc->scroll_accel - 1, 1);
+				else
+					msc->scroll_accel = SCROLL_ACCEL_DEFAULT;
+
+				break;
+			case TOUCH_STATE_DRAG:
+				/* Add a position delay since the drag start in which
+				* drag events are not registered. This decreases the
+				* sensitivity of dragging on Magic Mouse devices.
+				*/
+				if (abs(step_x) < scroll_delay_pos_x) {
+					step_x = 0;
+				} else {
+					step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
+				}
+
+				if (abs(step_y) < scroll_delay_pos_y) {
+					step_y = 0;
+				} else {
+					step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
+				}
+
+				if (step_x != 0) {
+					msc->touches[id].scroll_x -= step_x *
+						(64 - scroll_speed) * msc->scroll_accel;
+					msc->scroll_jiffies = now;
+					input_report_rel(input, REL_HWHEEL, -step_x);
+				}
+
+				if (step_y != 0) {
+					msc->touches[id].scroll_y -= step_y *
+						(64 - scroll_speed) * msc->scroll_accel;
+					msc->scroll_jiffies = now;
+					input_report_rel(input, REL_WHEEL, step_y);
+				}
+				break;
 			}
-
-			if (abs(step_y) < scroll_delay_pos_y) {
-				step_y = 0;
-			} else {
-				step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
-			}
-
-			if (step_x != 0) {
-				msc->touches[id].scroll_x -= step_x *
-					(64 - scroll_speed) * msc->scroll_accel;
-				msc->scroll_jiffies = now;
-				input_report_rel(input, REL_HWHEEL, -step_x);
-			}
-
-			if (step_y != 0) {
-				msc->touches[id].scroll_y -= step_y *
-					(64 - scroll_speed) * msc->scroll_accel;
-				msc->scroll_jiffies = now;
-				input_report_rel(input, REL_WHEEL, step_y);
-			}
-			break;
 		}
 	}
 
@@ -444,7 +455,7 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		}
 		msc->ntouches = 0;
 		for (ii = 0; ii < npoints; ii++)
-			magicmouse_emit_touch(msc, ii, data + ii * 9 + 4, npoints);
+			magicmouse_emit_touch(msc, ii, data + ii * 9 + 4, npoints, 0, 0);
 
 		clicks = data[1];
 		break;
@@ -460,7 +471,7 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		}
 		msc->ntouches = 0;
 		for (ii = 0; ii < npoints; ii++)
-			magicmouse_emit_touch(msc, ii, data + ii * 9 + 12, npoints);
+			magicmouse_emit_touch(msc, ii, data + ii * 9 + 12, npoints, 0, 0);
 
 		clicks = data[1];
 		break;
@@ -475,8 +486,6 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 			return 0;
 		}
 		msc->ntouches = 0;
-		for (ii = 0; ii < npoints; ii++)
-			magicmouse_emit_touch(msc, ii, data + ii * 8 + 6, npoints);
 
 		/* When emulating three-button mode, it is important
 		 * to have the current touch information before
@@ -484,8 +493,10 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		 */
 		x = (int)(((data[3] & 0x0c) << 28) | (data[1] << 22)) >> 22;
 		y = (int)(((data[3] & 0x30) << 26) | (data[2] << 22)) >> 22;
-		clicks = data[3];
+		for (ii = 0; ii < npoints; ii++)
+			magicmouse_emit_touch(msc, ii, data + ii * 8 + 6, npoints, x, y);
 
+		clicks = data[3];
 		/* The following bits provide a device specific timestamp. They
 		 * are unused here.
 		 *
@@ -524,6 +535,14 @@ static int magicmouse_raw_event(struct hid_device *hdev,
             return 0;
         }
         msc->ntouches = 0;
+
+        /* When emulating three-button mode, it is important
+         * to have the current touch information before
+         * generating a click event.
+         */
+        x = (int)((data[3] << 24) | (data[2] << 16)) >> 16;
+        y = (int)((data[5] << 24) | (data[4] << 16)) >> 16;
+
 		// print the values of the first 14 bytes of data and number of points and size.
 		// printk("The contents of npoints are: %i\n", npoints);
 		// printk("Size is: %i\n", size);
@@ -533,14 +552,8 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		// 	printk("data %i is: %i\n", jj, d);
 		// }
         for (ii = 0; ii < npoints; ii++)
-            magicmouse_emit_touch(msc, ii, data + ii * 8 + 14, npoints);
-
-        /* When emulating three-button mode, it is important
-         * to have the current touch information before
-         * generating a click event.
-         */
-        x = (int)((data[3] << 24) | (data[2] << 16)) >> 16;
-        y = (int)((data[5] << 24) | (data[4] << 16)) >> 16;
+            magicmouse_emit_touch(msc, ii, data + ii * 8 + 14, npoints, x, y);
+		
         clicks = data[1];
         break;
 	case DOUBLE_REPORT_ID:
@@ -557,6 +570,8 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 
 	if (input->id.product == USB_DEVICE_ID_APPLE_MAGICMOUSE ||
 		input->id.product == USB_DEVICE_ID_APPLE_MAGICMOUSE2) {
+		msc->x = x;
+		msc->y = y;
 		magicmouse_emit_buttons(msc, clicks & 3);
 		input_report_rel(input, REL_X, x);
 		input_report_rel(input, REL_Y, y);
