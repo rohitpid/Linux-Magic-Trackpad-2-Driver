@@ -7,8 +7,8 @@ cd ${DIR}
 chmod u+x ${DIR}/scripts/remove.sh
 ${DIR}/scripts/remove.sh
 
-# Reload udev after removing the udev rule
-udevadm control -R
+# Remove loaded driver
+modprobe -r hid_magicmouse
 
 # Restart Bluetooth
 systemctl restart bluetooth

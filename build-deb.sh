@@ -8,15 +8,9 @@ ETC_DIR="/etc"
 PKG_DIR="/pkg-debian"
 OPT_DIR="/opt/magicmouse-hid"
 
-DEB="magicmouse-hid_1.1.0-0.deb"
+DEB="magicmouse-hid_2.0.0-0.deb"
 
 cp -rf ${DIR}${ETC_DIR} ${DIR}${PKG_DIR}
-
-mkdir -p ${DIR}${PKG_DIR}${OPT_DIR}
-# Copy scripts to /opt
-cp -f ${DIR}/scripts/magic-mouse-2-add.sh ${DIR}${PKG_DIR}${OPT_DIR}/magic-mouse-2-add.sh
-# cp -f ${DIR}/install.sh ${DIR}${PKG_DIR}${OPT_DIR}/install.sh
-# cp -f ${DIR}/remove.sh ${DIR}${PKG_DIR}${OPT_DIR}/remove.sh
 
 mkdir -p ${DIR}${PKG_DIR}${OPT_DIR}/scripts
 cp -f ${DIR}/scripts/install.sh ${DIR}${PKG_DIR}${OPT_DIR}/scripts/install.sh
