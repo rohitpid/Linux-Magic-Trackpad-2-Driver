@@ -939,6 +939,7 @@ static struct hid_driver magicmouse_driver = {
 module_hid_driver(magicmouse_driver);
 
 MODULE_AUTHOR("Ricardo Rodrigues");
+MODULE_AUTHOR("John Chen");
 MODULE_AUTHOR("Rohit Pidaparthi");
 MODULE_AUTHOR("Chase Douglas");
 MODULE_AUTHOR("Michael Poole");
