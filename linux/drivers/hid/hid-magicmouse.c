@@ -4,6 +4,7 @@
  *   Copyright (c) 2010 Michael Poole <mdpoole@troilus.org>
  *   Copyright (c) 2010 Chase Douglas <chase.douglas@canonical.com>
  *   Copyright (c) 2018 Rohit Pidaparthi <rohitkernel@gmail.com>
+ *   Copyright (c) 2021 Ricardo Rodrigues <ricardo.e.p.rodrigues@gmail.com>
  */
 
 /*
@@ -20,7 +21,7 @@
 #include <linux/input/mt.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/usb/input.h>
+#include <linux/workqueue.h>
 
 #include "hid-ids.h"
 
@@ -39,6 +40,10 @@ static bool emulate_scroll_wheel = true;
 module_param(emulate_scroll_wheel, bool, 0644);
 MODULE_PARM_DESC(emulate_scroll_wheel, "Emulate a scroll wheel");
 
+static bool stop_scroll_while_moving = true;
+module_param(stop_scroll_while_moving, bool, 0644);
+MODULE_PARM_DESC(stop_scroll_while_moving, "Stop scrolling whenever the mouse moves");
+
 static unsigned int scroll_speed = 32;
 static int param_set_scroll_speed(const char *val,
 				  const struct kernel_param *kp) {
@@ -50,6 +55,30 @@ static int param_set_scroll_speed(const char *val,
 }
 module_param_call(scroll_speed, param_set_scroll_speed, param_get_uint, &scroll_speed, 0644);
 MODULE_PARM_DESC(scroll_speed, "Scroll speed, value from 0 (slow) to 63 (fast)");
+
+static unsigned int scroll_delay_pos_x = 200;
+static int param_set_scroll_delay_pos_x(const char *val,
+				  const struct kernel_param *kp) {
+	unsigned long delay;
+	if (!val || kstrtoul(val, 0, &delay))
+		return -EINVAL;
+	scroll_delay_pos_x = delay;
+	return 0;
+}
+module_param_call(scroll_delay_pos_x, param_set_scroll_delay_pos_x, param_get_uint, &scroll_delay_pos_x, 0644);
+MODULE_PARM_DESC(scroll_delay_pos_x, "Scroll X position delay before start scrolling");
+
+static unsigned int scroll_delay_pos_y = 200;
+static int param_set_scroll_delay_pos_y(const char *val,
+				  const struct kernel_param *kp) {
+	unsigned long delay;
+	if (!val || kstrtoul(val, 0, &delay))
+		return -EINVAL;
+	scroll_delay_pos_y = delay;
+	return 0;
+}
+module_param_call(scroll_delay_pos_y, param_set_scroll_delay_pos_y, param_get_uint, &scroll_delay_pos_y, 0644);
+MODULE_PARM_DESC(scroll_delay_pos_y, "Scroll Y position delay before start scrolling");
 
 static bool scroll_acceleration = false;
 module_param(scroll_acceleration, bool, 0644);
@@ -121,6 +150,7 @@ MODULE_PARM_DESC(report_undeciphered, "Report undeciphered multi-touch state fie
  * @ntouches: Number of touches in most recent touch report.
  * @scroll_accel: Number of consecutive scroll motions.
  * @scroll_jiffies: Time of last scroll motion.
+ * @drag_start: Time of drag start.
  * @touches: Most recent data for a touch, indexed by tracking ID.
  * @tracking_ids: Mapping of current touch input data to @touches.
  */
@@ -131,6 +161,8 @@ struct magicmouse_sc {
 	int ntouches;
 	int scroll_accel;
 	unsigned long scroll_jiffies;
+	int x;
+	int y;
 
 	struct {
 		short x;
@@ -140,6 +172,9 @@ struct magicmouse_sc {
 		u8 size;
 	} touches[MAX_TOUCHES];
 	int tracking_ids[MAX_TOUCHES];
+
+	struct hid_device *hdev;
+	struct delayed_work work;
 };
 
 static int magicmouse_firm_touch(struct magicmouse_sc *msc)
@@ -154,7 +189,10 @@ static int magicmouse_firm_touch(struct magicmouse_sc *msc)
 		int idx = msc->tracking_ids[ii];
 		if (msc->touches[idx].size < 8) {
 			/* Ignore this touch. */
-		} else if (touch >= 0) {
+			continue;
+		} 
+		
+		if (touch >= 0) {
 			touch = -1;
 			break;
 		} else {
@@ -192,6 +230,8 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 	if (emulate_3button) {
 		int id;
 
+		id = magicmouse_firm_touch(msc);
+
 		/* If some button was pressed before, keep it held
 		 * down.  Otherwise, if there's exactly one firm
 		 * touch, use that to override the mouse's guess.
@@ -200,9 +240,8 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 			/* The button was released. */
 		} else if (last_state != 0) {
 			state = last_state;
-		} else if (middle_click_3finger){
+		} else if (id >= 0 && middle_click_3finger){
 			int x;
-			id = magicmouse_firm_touch(msc);
 			x = msc->touches[id].x;
 			if (magicmouse_detect_3finger_click(msc) > 2)
 				state = 4;
@@ -210,7 +249,7 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 				state = 1;
 			else if (x > 0)
 				state = 2;
-		} else if ((id = magicmouse_firm_touch(msc)) >= 0) {
+		} else if (id >= 0) {
 			int x = msc->touches[id].x;
 			if (x < middle_button_start)
 				state = 1;
@@ -218,7 +257,7 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 				state = 2;
 			else
 				state = 4;
-			}/* else: we keep the mouse's guess */
+		}/* else: we keep the mouse's guess */
 		input_report_key(msc->input, BTN_MIDDLE, state & 4);
 	}
 
@@ -230,7 +269,7 @@ static void magicmouse_emit_buttons(struct magicmouse_sc *msc, int state)
 }
 
 static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
-		u8 *tdata, int npoints)
+		u8 *tdata, int npoints, int mouse_loc_x, int mouse_loc_y)
 {
 	struct input_dev *input = msc->input;
 	int id, x, y, size, orientation, touch_major, touch_minor, state, down;
@@ -308,38 +347,61 @@ static void magicmouse_emit_touch(struct magicmouse_sc *msc, int raw_id,
 		int step_x = msc->touches[id].scroll_x - x;
 		int step_y = msc->touches[id].scroll_y - y;
 
-		/* Calculate and apply the scroll motion. */
-		switch (state) {
-		case TOUCH_STATE_START:
-			msc->touches[id].scroll_x = x;
-			msc->touches[id].scroll_y = y;
+		/* Determine if the mouse has moved, if so then disable scrolling. */
+		bool continue_scroll = true;
+		if (stop_scroll_while_moving)
+		{
+			continue_scroll = msc->x == mouse_loc_x && msc->y == mouse_loc_y;
+		}
 
-			/* Reset acceleration after half a second. */
-			if (scroll_acceleration && time_before(now,
-						msc->scroll_jiffies + HZ / 2))
-				msc->scroll_accel = max_t(int,
-						msc->scroll_accel - 1, 1);
-			else
-				msc->scroll_accel = SCROLL_ACCEL_DEFAULT;
+		if (continue_scroll) {
+			/* Calculate and apply the scroll motion. */
+			switch (state) {
+			case TOUCH_STATE_START:
+				msc->touches[id].scroll_x = x;
+				msc->touches[id].scroll_y = y;
 
-			break;
-		case TOUCH_STATE_DRAG:
-			step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
-			if (step_x != 0) {
-				msc->touches[id].scroll_x -= step_x *
-					(64 - scroll_speed) * msc->scroll_accel;
-				msc->scroll_jiffies = now;
-				input_report_rel(input, REL_HWHEEL, -step_x);
+				/* Reset acceleration after half a second. */
+				if (scroll_acceleration && time_before(now,
+							msc->scroll_jiffies + HZ / 2))
+					msc->scroll_accel = max_t(int,
+							msc->scroll_accel - 1, 1);
+				else
+					msc->scroll_accel = SCROLL_ACCEL_DEFAULT;
+
+				break;
+			case TOUCH_STATE_DRAG:
+				/* Add a position delay since the drag start in which
+				* drag events are not registered. This decreases the
+				* sensitivity of dragging on Magic Mouse devices.
+				*/
+				if (abs(step_x) < scroll_delay_pos_x) {
+					step_x = 0;
+				} else {
+					step_x /= (64 - (int)scroll_speed) * msc->scroll_accel;
+				}
+
+				if (abs(step_y) < scroll_delay_pos_y) {
+					step_y = 0;
+				} else {
+					step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
+				}
+
+				if (step_x != 0) {
+					msc->touches[id].scroll_x -= step_x *
+						(64 - scroll_speed) * msc->scroll_accel;
+					msc->scroll_jiffies = now;
+					input_report_rel(input, REL_HWHEEL, -step_x);
+				}
+
+				if (step_y != 0) {
+					msc->touches[id].scroll_y -= step_y *
+						(64 - scroll_speed) * msc->scroll_accel;
+					msc->scroll_jiffies = now;
+					input_report_rel(input, REL_WHEEL, step_y);
+				}
+				break;
 			}
-
-			step_y /= (64 - (int)scroll_speed) * msc->scroll_accel;
-			if (step_y != 0) {
-				msc->touches[id].scroll_y -= step_y *
-					(64 - scroll_speed) * msc->scroll_accel;
-				msc->scroll_jiffies = now;
-				input_report_rel(input, REL_WHEEL, step_y);
-			}
-			break;
 		}
 	}
 
@@ -393,7 +455,7 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		}
 		msc->ntouches = 0;
 		for (ii = 0; ii < npoints; ii++)
-			magicmouse_emit_touch(msc, ii, data + ii * 9 + 4, npoints);
+			magicmouse_emit_touch(msc, ii, data + ii * 9 + 4, npoints, 0, 0);
 
 		clicks = data[1];
 		break;
@@ -409,7 +471,7 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		}
 		msc->ntouches = 0;
 		for (ii = 0; ii < npoints; ii++)
-			magicmouse_emit_touch(msc, ii, data + ii * 9 + 12, npoints);
+			magicmouse_emit_touch(msc, ii, data + ii * 9 + 12, npoints, 0, 0);
 
 		clicks = data[1];
 		break;
@@ -424,8 +486,6 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 			return 0;
 		}
 		msc->ntouches = 0;
-		for (ii = 0; ii < npoints; ii++)
-			magicmouse_emit_touch(msc, ii, data + ii * 8 + 6, npoints);
 
 		/* When emulating three-button mode, it is important
 		 * to have the current touch information before
@@ -433,8 +493,10 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		 */
 		x = (int)(((data[3] & 0x0c) << 28) | (data[1] << 22)) >> 22;
 		y = (int)(((data[3] & 0x30) << 26) | (data[2] << 22)) >> 22;
-		clicks = data[3];
+		for (ii = 0; ii < npoints; ii++)
+			magicmouse_emit_touch(msc, ii, data + ii * 8 + 6, npoints, x, y);
 
+		clicks = data[3];
 		/* The following bits provide a device specific timestamp. They
 		 * are unused here.
 		 *
@@ -473,6 +535,14 @@ static int magicmouse_raw_event(struct hid_device *hdev,
             return 0;
         }
         msc->ntouches = 0;
+
+        /* When emulating three-button mode, it is important
+         * to have the current touch information before
+         * generating a click event.
+         */
+        x = (int)((data[3] << 24) | (data[2] << 16)) >> 16;
+        y = (int)((data[5] << 24) | (data[4] << 16)) >> 16;
+
 		// print the values of the first 14 bytes of data and number of points and size.
 		// printk("The contents of npoints are: %i\n", npoints);
 		// printk("Size is: %i\n", size);
@@ -482,14 +552,8 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 		// 	printk("data %i is: %i\n", jj, d);
 		// }
         for (ii = 0; ii < npoints; ii++)
-            magicmouse_emit_touch(msc, ii, data + ii * 8 + 14, npoints);
-
-        /* When emulating three-button mode, it is important
-         * to have the current touch information before
-         * generating a click event.
-         */
-        x = (int)((data[3] << 24) | (data[2] << 16)) >> 16;
-        y = (int)((data[5] << 24) | (data[4] << 16)) >> 16;
+            magicmouse_emit_touch(msc, ii, data + ii * 8 + 14, npoints, x, y);
+		
         clicks = data[1];
         break;
 	case DOUBLE_REPORT_ID:
@@ -506,6 +570,8 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 
 	if (input->id.product == USB_DEVICE_ID_APPLE_MAGICMOUSE ||
 		input->id.product == USB_DEVICE_ID_APPLE_MAGICMOUSE2) {
+		msc->x = x;
+		msc->y = y;
 		magicmouse_emit_buttons(msc, clicks & 3);
 		input_report_rel(input, REL_X, x);
 		input_report_rel(input, REL_Y, y);
@@ -520,6 +586,21 @@ static int magicmouse_raw_event(struct hid_device *hdev,
 
 	input_sync(input);
 	return 1;
+}
+
+static int magicmouse_event(struct hid_device *hdev, struct hid_field *field,
+		struct hid_usage *usage, __s32 value)
+{
+	struct magicmouse_sc *msc = hid_get_drvdata(hdev);
+	if (msc->input->id.product == USB_DEVICE_ID_APPLE_MAGICMOUSE2 &&
+	    field->report->id == MOUSE2_REPORT_ID) {
+		// magic_mouse_raw_event has done all the work. Skip hidinput.
+		//
+		// Specifically, hidinput may modify BTN_LEFT and BTN_RIGHT,
+		// breaking emulate_3button.
+		return 1;
+	}
+	return 0;
 }
 
 static int magicmouse_setup_input(struct input_dev *input, struct hid_device *hdev)
@@ -695,26 +776,66 @@ static int magicmouse_input_configured(struct hid_device *hdev,
 }
 
 
+
+static int magicmouse_enable_multitouch(struct hid_device *hdev)
+{
+	const u8 *feature;
+	const u8 feature_mt[] = { 0xD7, 0x01 };
+	const u8 feature_mt_mouse2[] = { 0xF1, 0x02, 0x01 };
+	const u8 feature_mt_trackpad2_usb[] = { 0x02, 0x01 };
+	const u8 feature_mt_trackpad2_bt[] = { 0xF1, 0x02, 0x01 };
+	u8 *buf;
+	int ret;
+	int feature_size;
+
+	if (hdev->product == USB_DEVICE_ID_APPLE_MAGICTRACKPAD2) {
+		if (hdev->vendor == BT_VENDOR_ID_APPLE) {
+			feature_size = sizeof(feature_mt_trackpad2_bt);
+			feature = feature_mt_trackpad2_bt;
+		} else { /* USB_VENDOR_ID_APPLE */
+			feature_size = sizeof(feature_mt_trackpad2_usb);
+			feature = feature_mt_trackpad2_usb;
+		}
+	} else if (hdev->product == USB_DEVICE_ID_APPLE_MAGICMOUSE2) {
+		feature_size = sizeof(feature_mt_mouse2);
+		feature = feature_mt_mouse2;
+	} else {
+		feature_size = sizeof(feature_mt);
+		feature = feature_mt;
+	}
+
+	buf = kmemdup(feature, feature_size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	ret = hid_hw_raw_request(hdev, buf[0], buf, feature_size,
+				HID_FEATURE_REPORT, HID_REQ_SET_REPORT);
+	kfree(buf);
+	return ret;
+}
+
+static void magicmouse_enable_mt_work(struct work_struct *work)
+{
+	struct magicmouse_sc *msc =
+		container_of(work, struct magicmouse_sc, work.work);
+	int ret;
+
+	ret = magicmouse_enable_multitouch(msc->hdev);
+	if (ret < 0)
+		hid_err(msc->hdev, "unable to request touch data (%d)\n", ret);
+}
+
 static int magicmouse_probe(struct hid_device *hdev,
 	const struct hid_device_id *id)
 {
-	__u8 feature_mt_mouse2_bt[] = { 0xF1, 0x02, 0x01 };
-	__u8 feature_mt[] = { 0xD7, 0x01 };
-	__u8 feature_mt_trackpad2_usb[] = { 0x02, 0x01 };
-	__u8 feature_mt_trackpad2_bt[] = { 0xF1, 0x02, 0x01 };
-	__u8 *feature;
 	struct magicmouse_sc *msc;
 	struct hid_report *report;
 	int ret;
-	int feature_size;
-	struct usb_interface *intf;
 
 	if (id->vendor == USB_VENDOR_ID_APPLE &&
-	    id->product == USB_DEVICE_ID_APPLE_MAGICTRACKPAD2) {
-		intf = to_usb_interface(hdev->dev.parent);
-		if (intf->cur_altsetting->desc.bInterfaceNumber != 1)
-			return 0;
-	}
+	    id->product == USB_DEVICE_ID_APPLE_MAGICTRACKPAD2 &&
+	    hdev->type != HID_TYPE_USBMOUSE)
+		return 0;
 
 	msc = devm_kzalloc(&hdev->dev, sizeof(*msc), GFP_KERNEL);
 	if (msc == NULL) {
@@ -723,6 +844,8 @@ static int magicmouse_probe(struct hid_device *hdev,
 	}
 
 	msc->scroll_accel = SCROLL_ACCEL_DEFAULT;
+	msc->hdev = hdev;
+	INIT_DEFERRABLE_WORK(&msc->work, magicmouse_enable_mt_work);
 
 	msc->quirks = id->driver_data;
 	hid_set_drvdata(hdev, msc);
@@ -781,41 +904,26 @@ static int magicmouse_probe(struct hid_device *hdev,
 	 * but there seems to be no other way of switching the mode.
 	 * Thus the super-ugly hacky success check below.
 	 */
-	if (id->product == USB_DEVICE_ID_APPLE_MAGICMOUSE ||
-	    id->product == USB_DEVICE_ID_APPLE_MAGICTRACKPAD) {
-		feature_size = sizeof(feature_mt);
-		feature = kmemdup(feature_mt, feature_size, GFP_KERNEL);
-	}
-	else if (id->product == USB_DEVICE_ID_APPLE_MAGICMOUSE2){
-		feature_size = sizeof(feature_mt_mouse2_bt);
-		feature = kmemdup(feature_mt_mouse2_bt, feature_size, GFP_KERNEL);
-	} else { /* USB_DEVICE_ID_APPLE_MAGICTRACKPAD2 */
-		if (id->vendor == BT_VENDOR_ID_APPLE) {
-			feature_size = sizeof(feature_mt_trackpad2_bt);
-			feature = kmemdup(feature_mt_trackpad2_bt, feature_size,
-					  GFP_KERNEL);
-		} else { /* USB_VENDOR_ID_APPLE */
-			feature_size = sizeof(feature_mt_trackpad2_usb);
-			feature = kmemdup(feature_mt_trackpad2_usb, feature_size,
-					  GFP_KERNEL);
-		}
-	}
-	if (!feature) {
-		ret = -ENOMEM;
-		goto err_stop_hw;
-	}
-	ret = hid_hw_raw_request(hdev, feature[0], feature, feature_size,
-				 HID_FEATURE_REPORT, HID_REQ_SET_REPORT);
-	kfree(feature);
-	if (ret != -EIO && ret != feature_size) {
+	ret = magicmouse_enable_multitouch(hdev);
+	if (ret != -EIO && ret < 0) {
 		hid_err(hdev, "unable to request touch data (%d)\n", ret);
 		goto err_stop_hw;
+	}
+	if (ret == -EIO && id->product == USB_DEVICE_ID_APPLE_MAGICMOUSE2) {
+		schedule_delayed_work(&msc->work, msecs_to_jiffies(500));
 	}
 
 	return 0;
 err_stop_hw:
 	hid_hw_stop(hdev);
 	return ret;
+}
+
+static void magicmouse_remove(struct hid_device *hdev)
+{
+	struct magicmouse_sc *msc = hid_get_drvdata(hdev);
+	cancel_delayed_work_sync(&msc->work);
+	hid_hw_stop(hdev);
 }
 
 static const struct hid_device_id magic_mice[] = {
@@ -837,10 +945,20 @@ static struct hid_driver magicmouse_driver = {
 	.name = "magicmouse",
 	.id_table = magic_mice,
 	.probe = magicmouse_probe,
+	.remove = magicmouse_remove,
 	.raw_event = magicmouse_raw_event,
+	.event = magicmouse_event,
 	.input_mapping = magicmouse_input_mapping,
 	.input_configured = magicmouse_input_configured,
 };
 module_hid_driver(magicmouse_driver);
+
+MODULE_AUTHOR("Ricardo Rodrigues");
+MODULE_AUTHOR("John Chen");
+MODULE_AUTHOR("Rohit Pidaparthi");
+MODULE_AUTHOR("Chase Douglas");
+MODULE_AUTHOR("Michael Poole");
+
+MODULE_DESCRIPTION("Magic Mouse 2 driver for Linux");
 
 MODULE_LICENSE("GPL");

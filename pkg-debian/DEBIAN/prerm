@@ -1,0 +1,14 @@
+#!/bin/bash
+
+DIR="/opt/magicmouse-hid"
+cd ${DIR}
+
+# Remove drive through DKMS
+chmod u+x ${DIR}/scripts/remove.sh
+${DIR}/scripts/remove.sh
+
+# Remove loaded driver
+modprobe -r hid_magicmouse
+
+# Restart Bluetooth
+systemctl restart bluetooth
