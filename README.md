@@ -1,10 +1,12 @@
 # Linux Apple Magic Mouse 2 and Magic Trackpad 2 Driver
 
-This repository contains the linux hid-magicmouse driver with Magic Trackpad 2 and Magic Mouse 2 support for Linux 4.18. For older kernels you might have to diff and backport. It also contains 2 fixes to the Magic Mouse 2 regarding Bluetooth random disconnections and this driver not loading on bluetooth reconnection.
+This repository contains the linux hid-magicmouse driver with Magic Trackpad 2 and Magic Mouse 2 support for Linux 4.18 onwards. For older kernels you might have to diff and backport. It also contains 2 fixes to the Magic Mouse 2 regarding Bluetooth random disconnections and this driver not loading on bluetooth reconnection.
 
 This driver is based off of the work of @robotrovsky, @svartalf, @0xABAD and probably others.
 
 Please help to test this driver and report issues.
+
+**NOTE**: Since kernel version 5.15, there is support for the mouse without the need for this driver. We try to backport changes to this driver to have it up-to-date with the one on the kernel and try to offer a bit more functionality but it is not perfect. If you want the mouse to just work either install a more recent kernel or proceed with this driver installation.
 
 ## Ubuntu (and derivatives)
 
